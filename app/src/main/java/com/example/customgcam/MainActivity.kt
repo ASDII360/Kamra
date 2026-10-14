@@ -1,9 +1,11 @@
 package com.example.customgcam
 
 import android.Manifest
+import android.content.ContentValues
 import android.content.pm.PackageManager
 import android.graphics.*
 import android.os.Bundle
+import android.provider.MediaStore
 import android.widget.Button
 import android.widget.TextView
 import android.widget.Toast
@@ -13,7 +15,7 @@ import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
-import java.io.File
+import java.io.ByteArrayOutputStream
 
 class MainActivity : AppCompatActivity() {
 
@@ -65,50 +67,28 @@ class MainActivity : AppCompatActivity() {
 
     private fun takePhoto() {
         val imageCapture = imageCapture ?: return
-        val photoFile = File(externalMediaDirs.firstOrNull(), "${System.currentTimeMillis()}.png")
-        val outputOptions = ImageCapture.OutputFileOptions.Builder(photoFile).build()
+
+        val contentValues = ContentValues().apply {
+            put(MediaStore.MediaColumns.DISPLAY_NAME, "${System.currentTimeMillis()}")
+            put(MediaStore.MediaColumns.MIME_TYPE, "image/png")
+            put(MediaStore.Images.Media.RELATIVE_PATH, "Pictures/CustomCam")
+        }
+
+        val outputOptions = ImageCapture.OutputFileOptions.Builder(
+            contentResolver,
+            MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
+            contentValues
+        ).build()
 
         imageCapture.takePicture(outputOptions, ContextCompat.getMainExecutor(this), object : ImageCapture.OnImageSavedCallback {
             override fun onError(exc: ImageCaptureException) {
-                Toast.makeText(baseContext, "Capture failed", Toast.LENGTH_SHORT).show()
+                Toast.makeText(baseContext, "Capture failed: ${exc.message}", Toast.LENGTH_SHORT).show()
             }
 
             override fun onImageSaved(output: ImageCapture.OutputFileResults) {
-                val bitmap = BitmapFactory.decodeFile(photoFile.absolutePath)
-                val processedBitmap = applyHdrEffect(bitmap, contrastFactor = 1.25f)
-
-                photoFile.outputStream().use { out ->
-                    processedBitmap.compress(Bitmap.CompressFormat.PNG, 100, out)
-                }
-
-                Toast.makeText(baseContext, "Processed PNG Saved!", Toast.LENGTH_SHORT).show()
+                Toast.makeText(baseContext, "Photo Saved Successfully!", Toast.LENGTH_SHORT).show()
             }
         })
-    }
-
-    private fun applyHdrEffect(src: Bitmap, contrastFactor: Float): Bitmap {
-        val width = src.width
-        val height = src.height
-        val bmOut = Bitmap.createBitmap(width, height, src.config)
-        val canvas = Canvas(bmOut)
-        val paint = Paint()
-
-        val scale = contrastFactor
-        val translate = (-0.5f * scale + 0.5f) * 255f
-        
-        val colorMatrix = ColorMatrix(floatArrayOf(
-            scale, 0f, 0f, 0f, translate,
-            0f, scale, 0f, 0f, translate,
-            0f, 0f, scale, 0f, translate,
-            0f, 0f, 0f, 1f, 0f
-        ))
-
-        val saturation = ColorMatrix().apply { setSaturation(1.2f) }
-        colorMatrix.postConcat(saturation)
-
-        paint.colorFilter = ColorMatrixColorFilter(colorMatrix)
-        canvas.drawBitmap(src, 0f, 0f, paint)
-        return bmOut
     }
 
     private fun allPermissionsGranted() = ContextCompat.checkSelfPermission(
